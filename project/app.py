@@ -2,148 +2,129 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import re
 import numpy as np
-from datetime import datetime
+import re
 
-# Set Streamlit page config
-st.set_page_config(page_title="Excel Chatbot (Free)", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Excel Data Chatbot", page_icon="📊", layout="wide")
 
-# Preprocessing function
+# Function to preprocess uploaded data
 def preprocess_data(df):
-    try:
-        df.columns = [re.sub(r'[^a-zA-Z0-9]', '_', str(col).lower().strip()) for col in df.columns]
+    df.columns = [re.sub(r'[^a-zA-Z0-9]', '_', str(col).lower().strip()) for col in df.columns]
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            try:
+                df[col] = pd.to_datetime(df[col])
+            except:
+                pass
+        if df[col].dtype == 'object':
+            df[col].fillna('Unknown', inplace=True)
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            df[col].fillna(df[col].median(), inplace=True)
+    return df
 
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                try:
-                    df[col] = pd.to_datetime(df[col])
-                except:
-                    pass
-
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                df[col].fillna('Unknown', inplace=True)
-            elif pd.api.types.is_numeric_dtype(df[col]):
-                df[col].fillna(df[col].median(), inplace=True)
-
-        return df
-    except Exception as e:
-        st.error(f"Error during data preprocessing: {str(e)}")
-        return None
-
-# Simple rule-based analysis (replaces GPT)
-def analyze_data_simple(df, query):
+# Function to analyze query using pandas logic
+def analyze_query(df, query):
     query = query.lower()
     try:
         if "average" in query or "mean" in query:
-            for col in df.select_dtypes(include='number').columns:
+            for col in df.select_dtypes(include=np.number).columns:
                 if col in query:
-                    return f"Average of `{col}`: {df[col].mean():.2f}"
+                    return f"The average of '{col}' is {df[col].mean():.2f}"
 
-        elif "summary" in query or "statistics" in query:
-            return df.describe(include='all').to_string()
+        if "how many" in query and "under" in query:
+            for col in df.select_dtypes(include=np.number).columns:
+                match = re.search(r"under\s+(\d+)", query)
+                if match:
+                    threshold = float(match.group(1))
+                    count = df[df[col] < threshold].shape[0]
+                    return f"There are {count} records where '{col}' is under {threshold}."
 
-        elif "columns" in query:
-            return f"Columns: {', '.join(df.columns)}"
+        if "compare" in query or "group by" in query or "by" in query:
+            num_cols = df.select_dtypes(include=np.number).columns
+            cat_cols = df.select_dtypes(exclude=np.number).columns
+            if len(num_cols) > 0 and len(cat_cols) > 0:
+                result = df.groupby(cat_cols[0])[num_cols[0]].mean().reset_index()
+                return result.to_string(index=False)
 
-        elif "count" in query or "number of records" in query:
-            return f"Total number of rows: {len(df)}"
+        if "summary" in query or "describe" in query or "statistics" in query:
+            return df.describe().to_string()
 
-        else:
-            return "This version supports basic analysis like average, summary, column list, and row count."
+        return "🚫 Sorry, I couldn't understand your question. Please try again using keywords like 'average', 'under 30', 'compare by', or 'summary'."
+
     except Exception as e:
-        return f"Error analyzing data: {str(e)}"
+        return f"Error processing query: {str(e)}"
 
-# Visualization generation
+# Function to generate visualizations
 def generate_visualization(df, query):
     try:
-        fig, ax = plt.subplots(figsize=(12, 6))
-
+        fig, ax = plt.subplots(figsize=(10, 5))
         num_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
         date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
-        cat_cols = [
-            col for col in df.columns 
-            if not pd.api.types.is_numeric_dtype(df[col]) 
-            and df[col].nunique() < min(20, len(df)//2)
-        ]
+        cat_cols = [col for col in df.columns if df[col].nunique() < min(20, len(df)//2)]
 
-        query = query.lower()
+        query_lower = query.lower()
 
-        if any(word in query for word in ["trend", "time", "over time", "month", "year"]) and date_cols:
+        if any(word in query_lower for word in ["trend", "time", "month", "year"]) and date_cols:
             y_col = num_cols[0] if num_cols else None
             if y_col:
                 sns.lineplot(data=df, x=date_cols[0], y=y_col, ax=ax)
-                ax.set_title(f"Trend of {y_col} over time", pad=20)
+                ax.set_title(f"Trend of {y_col} over time")
+                ax.set_xlabel(date_cols[0])
+                ax.set_ylabel(y_col)
+                st.pyplot(fig)
+                return
+
+        if any(word in query_lower for word in ["distribution", "histogram", "spread"]):
+            if num_cols:
+                sns.histplot(df[num_cols[0]], kde=True, ax=ax)
+                ax.set_title(f"Distribution of {num_cols[0]}")
+                st.pyplot(fig)
+                return
+
+        if any(word in query_lower for word in ["compare", "group", "by", "versus", "vs"]):
+            if num_cols and cat_cols:
+                sns.barplot(data=df, x=cat_cols[0], y=num_cols[0], ax=ax, estimator=np.mean)
+                ax.set_title(f"Comparison of {num_cols[0]} by {cat_cols[0]}")
+                ax.set_xlabel(cat_cols[0])
+                ax.set_ylabel(num_cols[0])
                 plt.xticks(rotation=45)
+                st.pyplot(fig)
+                return
 
-        elif any(word in query for word in ["distribution", "histogram", "frequency", "spread"]) and num_cols:
-            sns.histplot(df[num_cols[0]], kde=True, ax=ax, bins='auto')
-            ax.set_title(f"Distribution of {num_cols[0]}", pad=20)
-
-        elif any(word in query for word in ["compare", "by", "versus", "vs", "across"]) and cat_cols and num_cols:
-            cat_col = cat_cols[0]
-            sns.barplot(data=df, x=cat_col, y=num_cols[0], ax=ax, estimator=np.mean)
-            ax.set_title(f"Average {num_cols[0]} by {cat_col}", pad=20)
-            plt.xticks(rotation=45)
-
-        else:
-            st.markdown("### Statistical Summary")
-            st.dataframe(df.describe(include='all').style)
-            return ""
-
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close()
-        return ""
     except Exception as e:
-        st.error(f"Couldn't generate visualization: {str(e)}")
-        return None
+        st.error(f"Visualization error: {str(e)}")
 
-# Main app
+# Streamlit app
 def main():
-    st.title("📊 Excel Chatbot (Free Version)")
-    st.markdown("Upload an Excel file and ask basic questions about your data. (No OpenAI API needed!)")
+    st.title("📊 Excel Data Chatbot (No OpenAI API)")
+    st.markdown("Upload an Excel file and ask questions about your data in natural language.")
 
     uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls"])
 
-    if uploaded_file is not None:
-        try:
-            df = pd.read_excel(uploaded_file)
-            df = preprocess_data(df)
+    if uploaded_file:
+        df = pd.read_excel(uploaded_file)
+        df = preprocess_data(df)
 
-            if df is not None:
-                st.success("Data successfully loaded!")
+        st.success("Data loaded successfully!")
+        with st.expander("Preview Data"):
+            st.dataframe(df.head())
 
-                with st.expander("Show Data Summary"):
-                    st.write(f"**Shape:** {df.shape[0]} rows, {df.shape[1]} columns")
-                    st.write("**Columns:**", list(df.columns))
-                    st.dataframe(df.head())
+        query = st.text_input("Ask a question about your data:")
+        if query:
+            st.subheader("Answer")
+            result = analyze_query(df, query)
+            st.text(result)
+            generate_visualization(df, query)
 
-                st.subheader("Ask Questions About Your Data")
-                query = st.text_input("Enter your question (e.g., 'What is the average income?', 'Show sales trend over time')")
-
-                if query:
-                    with st.spinner("Analyzing your data..."):
-                        result = analyze_data_simple(df, query)
-                        st.markdown("### Analysis Result")
-                        st.text(result)
-
-                        generate_visualization(df, query)
-            else:
-                st.error("Failed to process the uploaded file.")
-        except Exception as e:
-            st.error(f"Error processing file: {str(e)}")
-
-    with st.expander("💡 Sample Questions to Try"):
-        st.markdown("""
-        - What are the summary statistics for numerical columns?
-        - What is the average [numeric column]?
-        - How many records are there?
-        - Show the distribution of [numeric column]
-        - Compare [numeric column] by [categorical column]
-        - Show trend of [numeric column] over time
-        """)
+        with st.expander("Example Questions"):
+            st.markdown("""
+            - What is the average income?
+            - How many customers are under 30?
+            - Compare sales by region
+            - Show a bar chart of transaction count by job
+            - Show income trend over time
+            - Show distribution of age
+            """)
 
 if __name__ == "__main__":
     main()
