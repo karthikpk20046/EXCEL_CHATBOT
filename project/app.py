@@ -90,7 +90,7 @@ def generate_visualization(df, query):
 
         else:
             st.markdown("### Statistical Summary")
-            st.dataframe(df.describe(include='all').style.format("{:.2f}"))
+            st.dataframe(df.describe(include='all').style)
             return ""
 
         plt.tight_layout()
