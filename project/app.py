@@ -66,50 +66,60 @@ def preprocess_data(df):
         st.error(f"Error during data preprocessing: {str(e)}")
         return None
 
-def generate_visualization(df, query, x_col=None, y_col=None):
-    """Generate appropriate visualization based on query"""
+def generate_visualization(df, query):
+    """Generate appropriate visualization based on query content and data types"""
     try:
-        plt.figure(figsize=(10, 6))
+        # Create figure with better default size
+        fig, ax = plt.subplots(figsize=(12, 6))
         
-        # Determine visualization type based on query
-        if "trend" in query.lower() or "over time" in query.lower():
-            # Find date column for trend analysis
-            date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
-            num_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
-            
-            if date_cols and num_cols:
-                plt.title(f"Trend of {num_cols[0]} over time")
-                sns.lineplot(data=df, x=date_cols[0], y=num_cols[0])
-                st.pyplot(plt)
-                return f"Showing trend of {num_cols[0]} over time"
-        
-        elif "distribution" in query.lower() or "histogram" in query.lower():
-            num_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
-            if num_cols:
-                plt.title(f"Distribution of {num_cols[0]}")
-                sns.histplot(data=df, x=num_cols[0], kde=True)
-                st.pyplot(plt)
-                return f"Showing distribution of {num_cols[0]}"
-        
-        elif "compare" in query.lower() or "by" in query.lower():
-            # Try to find categorical and numerical columns for comparison
-            cat_cols = [col for col in df.columns if df[col].nunique() < 20 and not pd.api.types.is_numeric_dtype(df[col])]
-            num_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
-            
-            if cat_cols and num_cols:
-                plt.title(f"Comparison of {num_cols[0]} by {cat_cols[0]}")
-                sns.barplot(data=df, x=cat_cols[0], y=num_cols[0])
+        # Auto-detect column types more robustly
+        num_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+        date_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+        cat_cols = [
+            col for col in df.columns 
+            if not pd.api.types.is_numeric_dtype(df[col]) 
+            and df[col].nunique() < min(20, len(df)//2)  # Dynamic threshold
+        ]
+
+        # Improved trend detection
+        if any(word in query.lower() for word in ["trend", "time", "over time", "month", "year"]) and date_cols:
+            y_col = num_cols[0] if num_cols else None
+            if y_col:
+                sns.lineplot(data=df, x=date_cols[0], y=y_col, ax=ax)
+                ax.set_title(f"Trend of {y_col} over time", pad=20)
+                ax.set_xlabel("")
                 plt.xticks(rotation=45)
-                st.pyplot(plt)
-                return f"Showing comparison of {num_cols[0]} by {cat_cols[0]}"
+                
+        # Enhanced distribution analysis
+        elif any(word in query.lower() for word in ["distribut", "histogram", "frequency", "spread"]):
+            if num_cols:
+                sns.histplot(df[num_cols[0]], kde=True, ax=ax, bins='auto')
+                ax.set_title(f"Distribution of {num_cols[0]}", pad=20)
+                ax.set_xlabel(num_cols[0])
+                
+        # Smarter comparison logic
+        elif any(word in query.lower() for word in ["compare", "by", "versus", "vs", "across"]):
+            if cat_cols and num_cols:
+                # Find most relevant categorical column based on query
+                cat_col = next((col for col in cat_cols if col in query.lower()), cat_cols[0])
+                sns.barplot(data=df, x=cat_col, y=num_cols[0], ax=ax, estimator=np.mean)
+                ax.set_title(f"Average {num_cols[0]} by {cat_col}", pad=20)
+                plt.xticks(rotation=45)
+                ax.set_xlabel("")
+                
+        else:  # Default statistical view
+            st.markdown("### Statistical Summary")
+            st.dataframe(df.describe(include='all').style.format("{:.2f}"))
+            return ""
+            
+        # Final formatting
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+        return ""
         
-        # Default to showing first few rows if no specific visualization is triggered
-        st.write("Here are the first few rows of your data:")
-        st.dataframe(df.head())
-        return "Displaying sample data rows"
-    
     except Exception as e:
-        st.error(f"Error generating visualization: {str(e)}")
+        st.error(f"Couldn't generate visualization: {str(e)}")
         return None
 
 def analyze_with_gpt(df, query):
