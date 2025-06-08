@@ -5,6 +5,23 @@ import seaborn as sns
 from openai import OpenAI
 import re
 import numpy as np
+# Add this at the top with other imports
+from datetime import datetime
+
+# In analyze_with_gpt(), modify the prompt for better responses:
+prompt = f"""
+You are an expert data analyst assistant. Analyze this dataset with {len(df)} rows:
+
+Columns: {', '.join(df.columns)}
+Sample data: {df.head(3).to_string()}
+
+User question: "{query}"
+
+Provide:
+1. Concise answer with exact numbers
+2. Recommended visualization type
+3. Key insights (trends/outliers)
+"""
 
 # Set page config
 st.set_page_config(page_title="Excel Chatbot", page_icon="📊", layout="wide")
