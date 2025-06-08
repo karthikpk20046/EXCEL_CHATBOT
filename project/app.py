@@ -30,13 +30,23 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # Custom CSS for better UI
 st.markdown("""
     <style>
-    .main {padding: 2rem;}
-    .stButton>button {width: 100%;}
-    .stDownloadButton>button {width: 100%;}
-    .reportview-container .main .block-container {padding-top: 2rem;}
-    h1 {color: #2a3f5f;}
+        .main {
+            padding: 2rem;
+        }
+        button[kind="primary"] {
+            width: 100%;
+        }
+        .stDownloadButton > button {
+            width: 100%;
+        }
+        .block-container {
+            padding-top: 2rem;
+        }
+        h1 {
+            color: #2a3f5f;
+        }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 def preprocess_data(df):
     """Preprocess the dataframe to handle common issues"""
