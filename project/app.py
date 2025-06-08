@@ -136,6 +136,8 @@ def analyze_with_gpt(df, query):
 
         return response.choices[0].message.content
     except Exception as e:
+        if "quota" in str(e).lower():
+            return "🚫 You have exceeded your OpenAI API quota. Please update your API key or check your billing at https://platform.openai.com/account/usage"
         return f"Error analyzing data: {str(e)}"
 
 # Main app logic
