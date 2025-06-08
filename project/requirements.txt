@@ -1,0 +1,6 @@
+streamlit
+openai
+pandas
+plotly
+python-docx  # (if you use Word exports)
+xlrd         # (for Excel file support)
