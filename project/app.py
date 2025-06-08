@@ -16,21 +16,12 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # Custom CSS for better UI
 st.markdown("""
     <style>
-        .main {
-            padding: 2rem;
-        }
-        button[kind="primary"] {
-            width: 100%;
-        }
-        .stDownloadButton > button {
-            width: 100%;
-        }
-        .block-container {
-            padding-top: 2rem;
-        }
-        h1 {
-            color: #2a3f5f;
-        }
+    .stTextInput>div>div>input {
+        border: 2px solid #2a3f5f;
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 16px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
