@@ -169,8 +169,10 @@ def main():
                     st.write("**Preview:**")
                     st.dataframe(df.head())
 
-                # Custom input field (instead of raw HTML)
-                custom_field = st.text_input("Custom Field (optional):")
+                st.markdown("""
+    <label for="custom_id">Custom Field:</label>
+    <input type="text" id="custom_id" name="custom_field">
+""", unsafe_allow_html=True)
 
                 # Question input
                 st.subheader("Ask Questions About Your Data")
